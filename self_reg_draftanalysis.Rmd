@@ -1,0 +1,590 @@
+---
+title: 'Self-Regulation: Draft Analysis'
+author: "Emily Messer, Bruce Rawlings, Cristine Legare, Oskar Burger"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  bookdown::html_document2:
+    toc: yes
+    toc_float: true
+    fig_caption: yes
+    number_sections: yes
+---
+
+
+```{r global_options, echo=FALSE}
+knitr::opts_chunk$set(fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+```{r preliminaries}
+options(scipen=4)
+
+libs = c('tidyverse','haven','readxl','xlsx','ggthemes','sjlabelled','patchwork','kableExtra','knitr','lme4','bookdown') 
+invisible(lapply(libs,library, character.only=T))
+
+```
+
+```{r sourcing}
+source("scripts/self_reg_functions.r",local = knitr::knit_global())
+source("scripts/self_reg_dataprocessing.r",local = knitr::knit_global())
+#read_chunk("scripts/self_reg_functions.r")
+#read_chunk("scripts/self_reg_dataprocessing.r")
+```
+
+# Synopsis 
+
+Say what we are up to here. Analyzing HTKS and Marshmallow data
+We need a framework that controls for site-level random effects but also lets us explore them. 
+We also have this issue of pathway. 
+Lets use that DAGs package to visualize.
+
+
+# Sample description
+
+## Counts by location by age class and gender 
+Some sample size counts by age class and sex, for reference
+```{r, tabsexsum}
+table(DFsm$sex,DFsm$location,useNA = 'ifany') %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+
+```{r, tabagesum}
+table(DFsm$ageclass,DFsm$location,useNA = 'no') %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+
+
+
+```{r figsitesummary, fig.height = 6, fig.width = 11}
+bardat_cage = DFsm %>% dplyr::select(location,sex,ageclass) %>%
+  mutate(Age = as.factor(ageclass))%>%
+  filter(!is.na(Age))%>%
+  group_by(location,sex,Age)%>%
+  summarize(agesex_count = n())
+# add percent
+bardat_cage = bardat_cage %>%
+  group_by(location, add=F) %>%
+  mutate(percent=round(100*agesex_count/sum(agesex_count),1))
+
+barcage = ggplot(data=bardat_cage, aes(x=sex, y=agesex_count, fill=Age), na.rm = TRUE)
+
+# version 1, side by side 
+# barcage+
+#   geom_bar(stat="identity", position=position_dodge(), colour="black", na.rm = TRUE)+
+#   scale_x_discrete(na.translate = FALSE)+
+#   xlab('Gender') + ylab('count') +
+#   theme_classic() +
+#   facet_wrap( ~ location, ncol=5)
+
+barcage+
+  geom_bar(aes(fill=fct_reorder(Age, desc(Age))),stat="identity", colour="black")+
+  xlab('Gender') + ylab('Count') +
+  theme_minimal()+
+  theme(panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+  facet_wrap( ~ location, ncol=5) +
+  ggtitle("Sample sizes by age class, gender, and location") +
+  ylab("Count") +
+  xlab("Gender") +
+    theme(axis.title = element_text(angle = 90, vjust = -0.075),
+          axis.title.x = element_text(angle = 0, size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          plot.title = element_text(size = 20, face = "bold"))+
+    theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+
+
+```
+
+# Biometrics
+### A biometrics Figure 
+Weight and height by age: 
+
+```{r weight and height figure, fig.height = 6, fig.width = 11}
+wg = ggplot(DFsm, aes(age_yr, weight, color=location)) +
+  stat_smooth(method="loess", formula=y~x, span = 0.96,
+              alpha=0.2, size=2, aes(fill=location)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3, alpha=0.3) +
+  facet_grid(.~sex) +
+ # coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal() + 
+  #theme_wsj() + 
+  ggtitle("Weight by Age") +
+  ylab("Weight") +
+  xlab("Age") +
+    theme(axis.title = element_text(angle = 90, vjust = -0.075),
+          axis.title.x = element_text(angle = 0, size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          plot.title = element_text(size = 20, face = "bold"))+
+    theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+
+ht = ggplot(DFsm, aes(age_yr, height_stand, color=location)) +
+  stat_smooth(method="loess", formula=y~x,
+              alpha=0.2, size=2, aes(fill=location)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3, alpha=0.3) +
+  facet_grid(.~sex) +
+ # coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal() + 
+  #theme_wsj() + 
+  ggtitle("Height by Age") +
+  ylab("Height") +
+  xlab("Age") +
+    theme(axis.title = element_text(angle = 90, vjust = -0.075),
+          axis.title.x = element_text(angle = 0, size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          plot.title = element_text(size = 20, face = "bold"))+
+    theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+
+#wg / ht
+
+wg
+```
+Note - the odd shapes for Austin are simply due to the lower sample sizes there (and one or two fairly heavy kids pulling the curve up. We can simply do away with the curves or just leave it and explain that?)
+
+
+
+# Academic knowledge
+### Academic Knowledge Figure 
+The following version is mean-centered. This means that the average value for each location is subtracted from all of the individual scores at that location (so someone with the mean score within a site has a score of zero).
+NOTE: The AKA is based on measures from other tests but is not widely used in exactly this form so we could report the raw scores since they can't be referenced to published norms. However, doing so would still highlight the difference in academic achievement across sites. 
+
+```{r AKA, fig.height = 6, fig.width = 11}
+# drop the non-centered values
+df_aka_c2 = df_aka_c %>% filter(test %in% c('Reading_c','Math_c'))
+ggplot(df_aka_c2, aes(age_yr, score, color=sex)) +
+  stat_smooth(method="loess", formula=y~x,
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3, alpha=0.3) +
+  xlab("Age") + ylab("Test score") + 
+  facet_grid(test~location, scales = 'free') +
+  # coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+  
+  #theme_wsj() + 
+  ggtitle("Math and reading assessment") +
+  ylab("Score, mean centered") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 16, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 16, colour = "black", angle = 270))
+
+#df_aka_c2 = df_aka_c %>% filter(test %in% c('Reading_c','Math_c'))
+df_aka_raw = df_aka_c %>% filter(test %in% c('Reading','Math'))
+ggplot(df_aka_raw, aes(age_yr, score, color=sex)) +
+  stat_smooth(method="loess", formula=y~x,
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3, alpha=0.3) +
+  xlab("Age") + ylab("Test score") + 
+  facet_grid(test~location, scales = 'free') +
+  # coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+  
+  #theme_wsj() + 
+  ggtitle("Math and reading assessment") +
+  ylab("Score") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 16, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 16, colour = "black", angle = 270))
+
+#ggsave('mathreading.png',width=11, height=6,units = 'in')
+```
+In the above, you can note the steep rise with age in Ghana. Does this mean they have good schools there? We sample from different kinds of schools in Vanuatu, and you can see this in the score distribution for reading, but less so for math. There is probably a story in how much the variance by age changes by test and site (to be told down the road at some point). 
+
+# Self Regulation 
+
+### Marshmallow Plot Figure
+Q: is it common that kids become *more* likely to eat the marshmallow with age? 
+
+```{r marsh, fig.height = 6, fig.width = 11}
+#DFmarshtemp = DFsm %>% filter(age_yr <= 12 & age_yr >=5)
+ggplot(DFsm, aes(age_yr, yn_mmt, color=sex)) +
+  stat_smooth(method="glm", family = binomial, formula=y~x,
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.01, width=0.01), size=3, alpha=0.3) +
+ # xlab("Age") + ylab("Pr (Ate It)") + 
+  facet_grid(.~location) +
+  coord_cartesian(ylim = c(-0.05, 1.05))+
+  theme_minimal()+  
+  #theme_wsj() + 
+  ggtitle("Marshmallow Task") +
+  ylab("Pr (did not wait)") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+#ggsave('marshmallow.png',width=9, height=3.5,units = 'in')
+
+```
+In the above figure we have fit a logistic regression model to the odds that an individual ate the marshmallow (or treat). In Austin, only two kids have eaten one so far. The main thing to note is simply that we see trends that are slightly positive, negative, and flat. 
+
+
+Following up on the above result, we fit a basic model to the marshmallow response of ate it/didn't eat it. 
+
+### A Marshmallow Task Model:
+
+This is a logistic regression predicting the odds of having eaten the 'marshmallow'. 
+The predictors are: age, sex, reading, math, location
+
+```{r tabmarshmod1}
+marshmod1 = glm(yn_mmt ~ age_yr +sex+reading_total +math_total+location, family = binomial, data = DFsm)
+xx=summary(marshmod1)
+coefs = xx$coefficients
+m_out = data.frame(`Exp(Est)` = exp(coefs[,1]), Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable(., caption = "Logistic regression on probability the marshmallow was eaten") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+Some notes on these results:
+
++ significant location effects for Austin and Vanuatu. who are both significantly less likely to eat the treat than Manipur. 
++ age has a net positive effect on the odds 
+
+
+
+
+```{r tabglmermarshmod}
+marshmod2 = glmer(yn_mmt ~ age_yr +sex+reading_total +math_total + (1|location), family = binomial, data = DFsm)
+summary(marshmod2)
+```
+
+
+### HTKS Figure
+
+```{r htks, fig.height = 6, fig.width = 11}
+ggplot(DFsm, aes(age_yr, HTKS, color=sex)) +
+  stat_smooth(method = 'glm',method.args=list(family=poisson),
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3,alpha=0.3) +
+  facet_grid(.~location) +
+  #coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+
+  #theme_wsj() + 
+  ggtitle("HTKS Task") +
+  ylab("Score") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+
+
+```
+In the above figure (HTKS) the main finding is simply the consistently rising slopes with age. WE did not yet do a test to compare the steepness of the slopes but visually they are roughly similar and all plausibly following developmental trajectories. 
+Note: there are site-level differences in mean score. A previous version of this figure had a zero for a four year old in the Manipur data. this was treated as a missing value. 
+
+
+
+#### HTKS model
+This is a linear regression on the HTKS score with age, sex, and location as predictors
+```{r HTKS model}
+htksmod1 = lm(HTKS ~ age_yr +sex+location, data = DFsm)
+xx=summary(htksmod1)
+coefs = xx$coefficients
+m_out = data.frame(Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+NOTE: all the sites have significant coefficients and we see the effect of age (to no one's surprise).
+
+This is another HTKS model, but with the math and reading scores included. 
+```{r HTKS model2}
+htksmod2 = lm(HTKS ~ age_yr +sex+reading_total+math_total+location, data = DFsm)
+xx=summary(htksmod2)
+coefs = xx$coefficients
+m_out = data.frame(Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+I don't remember why we used linear models there. was i just in in a hurry an dnot thinking or was there a reason? Lets fit poisson and quasipoisson models to the same: 
+
+Poisson: 
+```{r HTKS model poisson1}
+htkspoi1 = glm(HTKS ~ age_yr +sex+location, family = quasipoisson, data = DFsm)
+xx=summary(htkspoi1)
+coefs = xx$coefficients
+m_out = data.frame(Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+```{r HTKS poisson2}
+htkspoi2 = glm(HTKS ~ age_yr +sex+reading_z +math_z+location, family = quasipoisson, data = DFsm)
+xx=summary(htkspoi2)
+coefs = xx$coefficients
+m_out = data.frame(Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+And i wonder if keeping sites as a fixed categorical variable even makes sense? 
+
+```{r htksmlm1}
+htksmlm1 = glmer(HTKS ~ 1+ (1|location), family = poisson, data = DFsm)
+summary(htksmlm1)
+
+# its debatable if we need to do these as glmer poission and just just lmer 
+htksmlm2 = glmer(HTKS ~ age_yr +sex+reading_z + math_z + (1|location), family = poisson, data = DFsm)
+summary(htksmlm2)
+
+```
+
+
+
+
+
+### second marshmallow model 
+Let's revisit the marshmallow in light of HTKS score: 
+
+```{r marshmod2}
+# previously we just used the raw data for reading and math. 
+marshmod2 = glm(yn_mmt ~ age_yr +sex+reading_z +math_z +HTKS+location, family = binomial, data = DFsm)
+xx=summary(marshmod2)
+coefs = xx$coefficients
+m_out = data.frame(ExpEsp = exp(coefs[,1]), Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+When HTKS score is in the model with reading and writing (the raw scores), the 'self reg' or 'inhibition' captured by the HTKS score seems to have little to do with the probability that a kid ate the treat.
+There are significant site level differences, with Austin and Vanuatu having lower odds of eating the marshmallow than India. Recall the coefficients from above, do they look much different? (this question no longer applies because i moved a bunch of stuff - BUT the idea that we check whats happening with the coefficients once we get things more organized here, is good to keep in mind) 
+
+Lots of site level variation. 
+
+```{r}
+marshmlm = glmer(yn_mmt ~ age_yr +sex+reading_z +math_z +HTKS + (1|location), family = binomial, data = DFsm)
+summary(marshmlm)
+
+```
+
+
+
+### A third Marshmallow model
+What happens if we exclude the academic tests?
+In this model we keep the HTKS score and drop the academic knowledge tests. 
+```{r marshmod3}
+marshmod3 = glm(yn_mmt ~ age_yr +sex+HTKS+location, family = binomial, data = DFsm)
+xx=summary(marshmod3)
+coefs = xx$coefficients
+m_out = data.frame(ExpEst = exp(coefs[,1]), Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+HTKS still has no relationship with the outcome on the Marshmallow test. 
+And the same site level effects are till there, perhaps the coefficient for Vanuatu went down a bit but the results on the site level coefficients are pretty similar. Why doesn't including or excluding education change the site-level effect on eating the treat?
+Obviously we'll have to follow up on t his with a more robust modeling framework, but its interesting. 
+Note that the coefficients for Vanuatu and Austin really aren't that different after we remove the math and reading scores. 
+
+
+
+
+### new thing to try
+Let's show a plot or two where the lines can vary: 
+
+```{r newhtksplots}
+qplot(x = age_yr2, y = HTKS, color = location, data = DFsm) +
+  stat_smooth(method = "lm", se = FALSE, fullrange = TRUE) + 
+  theme_minimal() + 
+  geom_jitter(alpha = 0.50, size=2, width = 0.2, height = 0.2) +
+  ggtitle("HTKS and Age") +
+  xlab("Age (years)") +
+  ylab("Score") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+
+qplot(x = age_yr2, y = yn_mmt, color = location, data = DFsm) +
+  stat_smooth(method = "glm", se = FALSE, fullrange = TRUE) + 
+  theme_minimal() + 
+  geom_jitter(alpha = 0.50, size=2, width = 0.2, height = 0) +
+  ggtitle("Waiting for a Marshmallow and Age") +
+  xlab("Age (years)") +
+  ylab("Pr(They did not wait)") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+
+
+#qplot(x = age_yr2, y = math_total, color = location, data = DFsm) +
+#  stat_smooth(method = "lm", se = FALSE, fullrange = TRUE) + 
+#  theme_minimal()
+
+qplot(x = age_yr2, y = math_total, color = location, data = DFsm) +
+  stat_smooth(method = "lm", se = FALSE, fullrange = TRUE) + 
+  theme_minimal() + 
+  geom_jitter(alpha = 0.50, size=2, width = 0.2, height = 0.2) +
+  ggtitle("Math Assessment and Age") +
+  xlab("Age (years)") +
+  ylab("Score") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+
+
+#qplot(x = math_total, y = HTKS, color = location, data = DFsm) +
+#  stat_smooth(method = "lm", se = FALSE, fullrange = TRUE) + 
+#  theme_minimal()
+
+qplot(x = math_total, y = HTKS, color = location, data = DFsm) +
+  stat_smooth(method = "lm", se = FALSE, fullrange = TRUE) + 
+  theme_minimal() + 
+  geom_jitter(alpha = 0.50, size=2, width = 0.2, height = 0.2) +
+  ggtitle("HTKS and Math Assessment") +
+  xlab("Math Score") +
+  ylab("HTKS Score") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+
+
+
+```
+
+
+On June 22 we stepped back into this in order to quickly redo this model. 
+**We should zscore the predictors and check for interactions** 
+
+```{r}
+htksage_z <- glm(HTKS ~ location * age_z, family = quasipoisson, data = DFsm)
+summary(htksage_z)
+
+htksmath_z <- glm(HTKS ~ location * math_z, family = quasipoisson, data = DFsm)
+summary(htksmath_z) # compare this result to the previous. that's really the main thing for now. 
+
+htksmathage_z <- glm(HTKS ~ sex + location * math_z * age_z, family = quasipoisson, data = DFsm)
+summary(htksmathage_z)
+
+htksreadage_z <- glm(HTKS ~ sex + location * reading_z * age_z, family = quasipoisson, data = DFsm)
+summary(htksreadage_z)
+
+
+```
+```{r}
+htksmathage_z.lmer <- lmer(HTKS ~ sex + math_z * age_z + (1|location), data = DFsm)
+summary(htksmathage_z.lmer)
+
+```
+
+```{r}
+htks_int = glmer(HTKS ~ 1 + (1|location), family = poisson, data = DFsm)
+
+lattice::dotplot(ranef(htks_int, condVar = T), strip = T, scales=list(relation='free'))$location
+
+
+lattice::dotplot(ranef(htksmathage_z.lmer, condVar = T), strip = T, scales=list(relation='free'))$location
+```
+
+```{r}
+mmt_int = glmer(yn_mmt ~ 1 + (1|location), family = binomial, data = DFsm)
+summary(mmt_int)
+lattice::dotplot(ranef(mmt_int, condVar = T), strip = T, scales=list(relation='free'))$location
+
+lattice::dotplot(ranef(marshmlm, condVar = T), strip = T, scales=list(relation='free'))$location
+```
+
+An old school approach, from that LEMMA thing at Bristol
+I wanted to make sure that the short cut above was giving what i thought it was: 
+
+```{r}
+u0 <-ranef(mmt_int, condVar = TRUE)
+u0se <-sqrt(attr(u0[[1]], "postVar")[1, , ]) 
+commid <-as.numeric(rownames(u0[[1]])) 
+u0tab <- cbind("commid" = commid, "u0" = u0[[1]], "u0se" = u0se) 
+colnames(u0tab)[2] <-"u0"
+u0tab <-u0tab[order(u0tab$u0), ]
+u0tab <-cbind(u0tab, c(1:dim(u0tab)[1]))
+u0tab <-u0tab[order(u0tab$commid), ]
+colnames(u0tab)[4] <-"u0rank"
+
+plot(u0tab$u0rank, u0tab$u0, type = "n", xlab = "u_rank", ylab = "Estimated residuals", ylim = c(-2, 2)) +
+segments(u0tab$u0rank, u0tab$u0 -1.96*u0tab$u0se, u0tab$u0rank, u0tab$u0 + 1.96*u0tab$u0se)+
+points(u0tab$u0rank, u0tab$u0, col = "blue")+
+abline(h = 0, col = "red")
+
+u0tab$names = rownames(u0tab)
+plot(u0tab$u0rank, u0tab$u0, type = "n", xlab = "u_rank", ylab = "Estimated residuals", ylim = c(-2, 2)) +
+segments(u0tab$u0rank, u0tab$u0 -1.96*u0tab$u0se, u0tab$u0rank, u0tab$u0 + 1.96*u0tab$u0se)+
+points(u0tab$u0rank, u0tab$u0, col = "blue")+
+abline(h = 0, col = "red")+
+  axis(3, labels = u0tab$names, at = u0tab$u0rank)
+
+
+```
+
+
+
+
