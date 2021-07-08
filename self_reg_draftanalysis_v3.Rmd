@@ -1,0 +1,1808 @@
+---
+title: 'Self-Regulation: Draft Analysis'
+author: "Emily Messer, Bruce Rawlings, Cristine Legare, Oskar Burger"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  bookdown::html_document2:
+    toc: yes
+    toc_float: true
+    fig_caption: yes
+    number_sections: yes
+---
+
+# Preface 
+
+This document is not a draft manuscript. Rather, it is a draft of data analysis and model checking. We will use it to: 
+
+* identify any errors in data that have not yet been dealt with
+* identify what we don't yet know how to do in terms of statistical modeling given the relationships we need to understand 
+* generate code and results that can be applied to larger dataset that becomes available down the road
+* continue to generally expand our skills in R and in coding generally 
+
+## Rmarkdown and Rstudio 
+
+Note that this is being generated in an Rmarkdown document using an Rproject in Rstudio. 
+
+There are a few tricks we'll need to learn to become accustomed to using this document. 
+Note the files pane, probably to your lower right in Rstudio. Here you will see that we have a file structure consisting of root, and branches to data, scripts, and Figs. There will be some other unfamiliar files but ignore those for now. 
+
+This structure helps with workflow and makes it so we don't all have to set our own directories and paths n stuff. 
+Ok, in using Rmarkdown we can easily combine text (the text you are reading right now) with code and output from R. 
+
+You see below that the coding is in code chunks - these start with three accent marks like this ` - which are in the upper left of most keyboards. 
+
+From Rmarkdown we can easily save our results, text and analsysis, to output files in html, pdf, and word. 
+Since html is the easiest, we'll use that for now, but we will want to learn pdf and Word for good measure. 
+
+To 'export' this as an html file you just need to 'knit' the file. You should see a button at the top of this window that says 'knit' - that's where you make this into a pdf. 
+
+You will see below that we set echo=FALSE is the default for our code chunks. This means that the code in the chunk will not display in file that we knit. Sometimes though, we might want the code to show, so we can set echo=T to do that. 
+
+We'll probably add more about Rstudio use at a later date. 
+
+Okay - depending on where you are reading this, you might see some code chunks here about global_options and preliminaries. 
+
+Note, you can run the contents of any single code chunk by pressing the green arrow in its upper right corner. 
+
+```{r global_options, echo=FALSE}
+knitr::opts_chunk$set(fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+```{r preliminaries}
+options(scipen=4)
+# these are the libraries we'll use. if you need to add any that aren't here, just add them to the list
+libs = c('tidyverse','haven','readxl','xlsx','ggthemes','sjlabelled','patchwork','kableExtra','knitr','lme4','bookdown','generics','lubridate') 
+invisible(lapply(libs,library, character.only=T))
+
+```
+
+
+
+
+```{r sourcing}
+source("scripts/self_reg_functions.r",local = knitr::knit_global())
+source("scripts/self_reg_dataprocessing.r",local = knitr::knit_global())
+
+```
+
+### Sourcing
+Using an R command called source we are bringing in the contents of scripts that are saved in the scripts folder. This helps cut back on the amount of code here in the main document. You can examine or edit those scripts at any time just by clicking on the folder and opening the file. Note - the scrips will be in standard r script format and not Rmarkdown. 
+
+# Synopsis 
+
+Okay, let's focus more on the task at hand. We need to analyze the self-regulation data in a productive and structured way. 
+
+Let's think of some broad goals here: 
+
+1. Get a good grasp of descriptive statistics for the key variables. 
+
+2. Start analysis, which we've indeed begun, but check it and get into better shape
+
+3. What are the things we know we gotta figure out?
+ - a somewhat standard modeling process that uses group-level random effects. 
+ - how to ask questions about 'causal pathways' 
+ - in conducting the mixed-effect (multi-level) analysis, what do we really need to extract in terms of site-level differences. 
+ 
+**We haven't really talked about the tasks and the research questions yet. we of course will add that soon.**
+
+## Research goals and questions 
+
+**We need to write this**
+
+# Sample description
+
+Here we begin to describe some of our main variables. 
+The main tools: 
+graphs and the calculation of simple statistics like means and variances. you know. 
+
+Variables we will focus on (this should come from the research goals and questions).
+
+ * age
+ * sex
+ * height
+ * weight
+ * AKA - reading
+ * AKA - math 
+ * MMT - binary
+ * HTKS total score - count
+ 
+
+## Age and sex 
+
+Some sample size counts by age class and sex.
+NOTE: there are better ways to show this, but have a look at the following code: 
+
+
+```{r, tabsexsum, echo=TRUE}
+table(DFsm$sex,DFsm$location,useNA = 'ifany') %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+table is a common R function that is very useful for making quick tabulations like this. The option useNA tells R to include any missing values if they are there. The default is not to tabulate NAs so its good to add that. 
+We pass the table to Kable becuse that makes a nice looking table in the html output. 
+
+
+```{r, tabagesum}
+table(DFsm$ageclass,DFsm$location,useNA = 'no') %>% kable(., caption = 'Age class by site') %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+
+
+
+```{r figsitesummary, fig.height = 6, fig.width = 11}
+bardat_cage = DFsm %>% dplyr::select(location,sex,ageclass) %>%
+  mutate(Age = as.factor(ageclass))%>%
+  filter(!is.na(Age))%>%
+  group_by(location,sex,Age)%>%
+  summarize(agesex_count = n())
+# add percent
+bardat_cage = bardat_cage %>%
+  group_by(location, add=F) %>%
+  mutate(percent=round(100*agesex_count/sum(agesex_count),1))
+
+barcage = ggplot(data=bardat_cage, aes(x=sex, y=agesex_count, fill=Age), na.rm = TRUE)
+
+# version 1, side by side 
+# barcage+
+#   geom_bar(stat="identity", position=position_dodge(), colour="black", na.rm = TRUE)+
+#   scale_x_discrete(na.translate = FALSE)+
+#   xlab('Gender') + ylab('count') +
+#   theme_classic() +
+#   facet_wrap( ~ location, ncol=5)
+
+barcage+
+  geom_bar(aes(fill=fct_reorder(Age, desc(Age))),stat="identity", colour="black")+
+  xlab('Gender') + ylab('Count') +
+  theme_minimal()+
+  theme(panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+  facet_wrap( ~ location, ncol=5) +
+  ggtitle("Sample sizes by age class, gender, and location") +
+  ylab("Count") +
+  xlab("Gender") +
+    theme(axis.title = element_text(angle = 90, vjust = -0.075),
+          axis.title.x = element_text(angle = 0, size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          plot.title = element_text(size = 20, face = "bold"))+
+    theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+
+
+```
+
+# Weight and height
+
+```{r weight and height figure, fig.height = 6, fig.width = 11}
+wg = ggplot(DFsm, aes(age_yr, weight, color=location)) +
+  stat_smooth(method="loess", formula=y~x, span = 0.96,
+              alpha=0.2, size=2, aes(fill=location)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3, alpha=0.3) +
+  facet_grid(.~sex) +
+ # coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal() + 
+  #theme_wsj() + 
+  ggtitle("Weight by Age") +
+  ylab("Weight") +
+  xlab("Age") +
+    theme(axis.title = element_text(angle = 90, vjust = -0.075),
+          axis.title.x = element_text(angle = 0, size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          plot.title = element_text(size = 20, face = "bold"))+
+    theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+
+ht = ggplot(DFsm, aes(age_yr, height2, color=location)) +
+  stat_smooth(method="loess", formula=y~x,
+              alpha=0.2, size=2, aes(fill=location)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3, alpha=0.3) +
+  facet_grid(.~sex) +
+ # coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal() + 
+  #theme_wsj() + 
+  ggtitle("Height by Age") +
+  ylab("Height") +
+  xlab("Age") +
+    theme(axis.title = element_text(angle = 90, vjust = -0.075),
+          axis.title.x = element_text(angle = 0, size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          plot.title = element_text(size = 20, face = "bold"))+
+    theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+
+#wg / ht
+
+wg 
+ht
+```
+Note - the odd shapes for Austin are simply due to the lower sample sizes there (and one or two fairly heavy kids pulling the curve up. We can simply do away with the curves or just leave it and explain that?)
+
+We had removed the height curve but clearly we need to fix the height data for Ghana. We will stop displaying this figure in future drafts. 
+
+What if you wanted to calculate means by sex and location?
+
+```{r tabheightweightagemean}
+DFsm %>% group_by(location, sex) %>%
+  summarize(mean_age = mean(age_yr, na.rm=T),
+            mean_height = mean(height2, na.rm=T),
+            mean_weight = mean(weight, na.rm=T)) %>% ungroup %>%
+  mutate(across(where(is.numeric), ~round(.x,2))) %>%
+  kable(., caption = 'Mean age, height, and weight, by location.') %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) 
+
+```
+Okay, there's a lot more we could do in terms of ways to display and other things to calculate but i'm digressing a bit... 
+
+
+
+# Academic knowledge
+
+By now we should have discussed mean centering, but we have not. 
+Here's the deal - for statistical and practical reasons you often want to center a variable, and in some cases you may want to rescale it. 
+We will say 'centered' to mean that each value is subtracted from the mean. And 'scaled' to mean that each value was subtracted from the mean and then divided by the sample standard deviation. 
+Centering is sometimes nicer because of interpretation. For instance, if we center age, the coefficient next to age in a regression is still in units of years, but the value when age = 0 is the sample mean. This is actually kinda nice for interpretation because usually interpreting age = 0 is not useful. 
+However, if we scale age, then we have to think in units of standard deviations rather than years. 
+So we will need to make that decision carefully. 
+For academic knowledge scores, thinking in terms of standard deviation units above and below the mean, may actually be more useful than the units of 'score' since the score of our test is also pretty arbitrary. 
+
+Ok, back to where we left off: 
+
+NOTE: The AKA is based on measures from other tests but is not widely used in exactly this form so we could report the raw scores since they can't be referenced to published norms. However, doing so would still highlight the difference in academic achievement across sites. 
+
+```{r figakacentered, fig.height = 6, fig.width = 11}
+# drop the non-centered values
+# this dataset was prepared in the self_reg_dataprocessing.r script 
+df_aka_c2 = df_aka_c %>% filter(test %in% c('Reading_c','Math_c'))
+ggplot(df_aka_c2, aes(age_yr, score, color=sex)) +
+  stat_smooth(method="loess", formula=y~x,
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3, alpha=0.3) +
+  xlab("Age") + ylab("Test score") + 
+  facet_grid(test~location, scales = 'free') +
+  # coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+  
+  #theme_wsj() + 
+  ggtitle("Math and reading assessment") +
+  ylab("Score, mean centered") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 16, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 16, colour = "black", angle = 270))
+```
+
+
+
+```{r figakaraw, fig.height = 6, fig.width = 11}
+#df_aka_c2 = df_aka_c %>% filter(test %in% c('Reading_c','Math_c'))
+df_aka_raw = df_aka_c %>% filter(test %in% c('Reading','Math'))
+ggplot(df_aka_raw, aes(age_yr, score, color=sex)) +
+  stat_smooth(method="loess", formula=y~x,
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3, alpha=0.3) +
+  xlab("Age") + ylab("Test score") + 
+  facet_grid(test~location, scales = 'free') +
+  # coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+  
+  #theme_wsj() + 
+  ggtitle("Math and reading assessment") +
+  ylab("Score") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 16, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 16, colour = "black", angle = 270))
+
+```
+In the above, you can note the steep rise with age in Ghana. Does this mean they have good schools there? We sample from different kinds of schools in Vanuatu, and you can see this in the score distribution for reading, but less so for math. There is probably a story in how much the variance by age changes by test and site (to be told down the road at some point). 
+
+Let's start to examine some correlations. 
+We will echo the following code chunk to show the procedure: 
+
+```{r groupedcorrelationAKA, echo=TRUE}
+DFsm %>% group_by(location) %>% 
+  summarize(correlation = cor(math_cent, reading_cent, use = "complete.obs")) %>%
+  kable(., caption = 'Correlation between math and reading scores for each fieldsite')
+
+
+```
+
+The correlation between reading and math scores increases from the lowest at Ghana to the highest at Austin. 
+The relationships are all fairly steeply positive. I'm not sure if we think that the differnce between Ghana and Austin is more than we expected, or less, as representing the difference between maximum and minimum correlations in the fieldsites. 
+
+Let's see some images, just so we think it through. 
+```{r figakascores}
+ggplot(DFsm, aes(x = math_cent, y = reading_cent, color = location))+geom_point()+geom_smooth(method='lm')+
+  labs(title = 'Math and reading score relationship for each site, centered values')
+
+ggplot(DFsm, aes(x = math_total, y = reading_total, color = location))+geom_point()+geom_smooth(method='lm')+
+  labs(title = 'Math and reading score relationship for each site, raw values')
+
+
+```
+
+Here are some more correlations - we are just trying to become acquainted with the group-level effects: 
+```{r groupedcorrelationHTKS}
+DFsm %>% group_by(location) %>% 
+  summarize(correlation = cor(HTKS, age_yr, use = "complete.obs")) %>% 
+  kable(., caption = 'Correlation between HTKS and age for each fieldsite')
+
+DFsm %>% group_by(location) %>% 
+  summarize(correlation = cor(HTKS, yn_mmt, use = "complete.obs",method = 'spearman')) %>%
+  kable(., caption = 'Correlation between HTKS and marshmallow test result.')
+
+DFsm %>% group_by(location) %>% 
+  summarize(correlation = cor(age_yr, yn_mmt, use = "complete.obs",method = 'spearman')) %>%
+  kable(., caption = 'Correlation between age and marshmallow test result.')
+
+
+```
+
+# Self reg vars
+OB orginals 
+
+```{r tabmarshsum}
+DFsm %>% group_by(location, sex) %>%
+  summarize(ateit = mean(yn_mmt, na.rm=T),
+            htksmean = mean(HTKS, na.rm=T)) %>%
+            ungroup %>%
+  mutate(across(where(is.numeric), ~round(.x,2))) %>%
+  kable(., caption = 'Site level marshmallow success and mean HTKS score by sex') %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) 
+
+```
+
+
+```{r marsh, fig.height = 6, fig.width = 11}
+#DFmarshtemp = DFsm %>% filter(age_yr <= 12 & age_yr >=5)
+ggplot(DFsm, aes(age_yr, yn_mmt, color=sex)) +
+  stat_smooth(method="glm", family = binomial, formula=y~x,
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.01, width=0.01), size=3, alpha=0.3) +
+ # xlab("Age") + ylab("Pr (Ate It)") + 
+  facet_grid(.~location) +
+  coord_cartesian(ylim = c(-0.05, 1.05))+
+  theme_minimal()+  
+  #theme_wsj() + 
+  ggtitle("Marshmallow Task") +
+  ylab("Pr (did not wait)") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+#ggsave('marshmallow.png',width=9, height=3.5,units = 'in')
+```
+
+
+In the above figure we have fit a logistic regression model to the odds that an individual ate the marshmallow (or treat). In Austin, only two kids have eaten one so far. The main thing to note is simply that we see trends that are slightly positive, negative, and flat. 
+
+
+Following up on the above result, we fit a basic model to the marshmallow response of ate it/didn't eat it. 
+
+## A Marshmallow Task
+
+Ok, removing what was here before, let's be really pedantic for a moment so build a good foundation for the stuff that follows. 
+
+We are going to fit intercept-only models to the marshmallow data and make some calculations. 
+
+First, we are going to do something seemingly goofy and fit a linear model to a binary response. 
+
+### EM: From this point onward yn_mmt has been replaced with marsh_sr to indicated kids that waited and did not eat any of the treat therefore scored higher self regulation scores. Location has also been switched out to indicate village versus town for Tanna  
+
+## Switch MMT coding 
+```{r marshexploreEM chnaging from mmt_yn to marsh_sr}
+# What does y and n mean in the yn_mmt columns?
+# DFsm$yn_mmt # y/n column. Commented out when not using. 
+# DFsm$treat_eat # raw data. Commented out when not using.  
+# it looks like p is coded as NaN, n is coded as 0 and y is coded as 1 when comparing the yn_mmt with the raw treat_eat 
+# as y they ate it or p means they partially ate it in these two cases the ppt's is demonstrating lower self regulation we need to flip this score so n = 1 and y and p = 0. Then we can compare higher scores on the mmt with higher scores on the htks indicating better self reg. 
+# flipping the score and creating a new self-reg column for the mmt: 
+DFsm = mutate(DFsm, marsh_sr = case_when(treat_eat == "y" ~ "0",
+                                            treat_eat == "n" ~ "1",
+                                            treat_eat == "p" ~ "0"))
+# check that worked?
+# DFsm$marsh_sr # compare the new column with the raw data.Commented out when not using
+# DFsm$treat_eat # raw data  Commented out when not using. 
+# check to find out what column is being read as
+#str(DFsm$marsh_sr) # says its character want it as numeric to generate mean
+DFsm = DFsm %>%
+  mutate(marsh_sr = as.numeric(marsh_sr)) # converting to numeric 
+
+```
+
+```{r splitting Tanna by town and village going from location to location2 in subsequent analysis}
+# lets try and split Tanna up so that rather than location being Vanuatu we make it Tanna_town and Tanna_villages
+#First create a new column where the towns and villages are indicated from loc column in the Tanna pid registry
+DFsm = mutate(DFsm, Tanna_loc = case_when(loc == "Lenekel" ~ "_town",
+                                          loc == "Lenaulaul" ~ "_villages",
+                                          loc == "Ikunala" ~ "_villages"))
+# next we need to combine this information into a new location column and replace Vanuatu with this info while keeping the other sites as the same.
+DFsm$location2 = paste0(DFsm$location, DFsm$Tanna_loc)
+# this gives us the locations altogether but it has NA at the end and i can't delete this with NA omit or any other gsub removal options so going the long way around and mutating the previous column instead.
+
+DFsm = mutate(DFsm, location2 = case_when(location2 == "Vanuatu_town" ~ "VA_town",
+                                          location2 == "Vanuatu_villages" ~ "VA_villages",
+                                          location2 == "MalaysiaNA" ~ "Malaysia",
+                                          location2 == "GhanaNA" ~ "Ghana",
+                                          location2 == "IndiaNA" ~ "India",
+                                          location2 == "AustinNA" ~ "Austin"))
+# check the attributes of the location column
+#str(DFsm$location2)
+#make the location column a factor. 
+DFsm = DFsm %>%
+  mutate(location2 = as.factor(location2))
+
+```
+
+```{r marsh intonly lm, echo=T}
+mmtint_lm = lm(marsh_sr ~ 1, data = DFsm)
+tidy(mmtint_lm)
+
+```
+What do these numbers mean? 
+Let's check out the basic frequencies again. 
+```{r}
+table(DFsm %>% select(marsh_sr))
+```
+Ok, the percent who waited overall is 325/(325+133) or `r 325/(325+133)`, which is the same as intercept. 
+
+
+```{r marsh loc lm, echo=T}
+mmtloc_lm = lm(marsh_sr ~ 1 + location2, data = DFsm) #has tanna split into town and village now 
+tidy(mmtloc_lm)
+
+```
+Let's check out the basic frequencies again. 
+```{r}
+table(DFsm %>% select(marsh_sr, location2))
+```
+This is only slightly different from the case above, but now we need to remember that this is a linear combination of factors and so we have to add the intercept to each coefficient to get the raw proportion. 
+For example, the proportion of kids who waited in Austin is 44/(5+44) or `r 44/(5+44)` 
+From the model above we hope to get the same value if we add the intercept from location only model to the coefficient for Austin, which is something like 0.6237 + 0.2743.
+
+India is not pictured in the linear regression output because it is the intercept, but lets check this to make sure. The proportion of kids who ate the treat in India is 58/(58+35) or `r 58/(58+35)`. 
+Which is indeed the same value as the estimate for the intercept for the location only model. 
+
+What happens if we fit a logistic model instead? 
+Let's fit one and then walk through it. 
+
+
+```{r MMT glm int only, echo=T}
+mmtint_glm = glm(marsh_sr ~ 1, family = binomial, data = DFsm)
+tidy(mmtint_glm)
+```
+Now we get a negative number, `r coef(mmtint_glm)[1] %>% round(.,2)` what does this mean? 
+We are modeling the log odds that someone ate the marshmallow. 
+A simple way to see the difference between an odds and a proportion is to just calculate it. Above for the overall proportion we calculated this 128/(325+128), which is the number of those who ate it by the total. Now we calculate this 128/325 which is the number who ate it divided by the number who didn't. This is like a ratio that says 'how much more likely were kids in this sample to eat the marshmallow, vs not eat it. 
+This still doesn't retrieve the coefficient from the intercept only model tho, because that is the log odds, so we need log(128/325) or `r log(128/325)` 
+Log odds are kinda weird to interpret so we often use the odds ration instead. This is give by exponentiating the coefficient exp(estimate) = the odd ratio, or exp(log(128/325)) which is '`r exp(log(128/325))` (recall that the exponential function is the inverse of the log so they undo each other when done in succession like that - if that didn't make sense, don't worry about it). 
+Does this number make sense? 128 ate the marshmallow and 325 did not. Note that if the same number of people ate it as didn't eat it, we'd have an odds ratio of 1.0. If people were less likely to have eaten than to have eaten it, this number will be less than one. 
+So overall, for our marshmallow task as of `r today()` kids in our sample were about 60% less likely to have eaten it than not eaten it. 
+
+We could of course extend this to a glm with only location fixed-effects. We will want to compare these numbers later so let's make that calculation really quick: 
+
+```{r mmt glm loc}
+mmtloc_glm = glm(marsh_sr ~ 1 + location2, family = binomial, data = DFsm)
+tidy(mmtloc_glm)
+```
+Again, the intercept if the value for India. The log odds is `r coef(mmtloc_glm)["(Intercept)"] %>% unname()` and the odds ratio is `r exp(coef(mmtloc_glm)["(Intercept)"]) %>% unname()`. From above we know that in India 35 kids ate the marshmallow and 58 did not, so hopefully we get the same two numbers with log(35/58) and just 35/58. 
+
+
+
+**Please review the above sequence until it is clear** 
+
+Let's extend this one step further by using the information both within AND among sites. This is what a mixed-model (or multi-level) model does for us.  
+We already suspect that there are site-level differences so this lets us include those differences in our understanding of variation in the marshmallow task response. 
+
+
+```{r MMTglmerlocint, echo=T}
+library(sjPlot)
+mmtloc_glmer = glmer(marsh_sr ~ 1 + (1|location2), family = binomial, data = DFsm)
+# unfortunately tidy won't work on glmer objects 
+# we will try out this package we just learned about called sjPlot 
+tab_model(mmtloc_glmer)
+# which looks great. 
+# to specifically bring out each set of effects we do this: 
+fixef(mmtloc_glmer)
+ranef(mmtloc_glmer)
+
+xx = ranef(mmtloc_glmer) %>% as_tibble() %>% mutate(No_pooling_OR = 128/325, # <- bad lazy habit here, as these numbers will change. 
+                             full_pooling_OR = exp(coef(mmtloc_glm)),
+                             partial_pooling_OR = exp(condval))
+
+kable(xx, caption = 'Comparrison of estimates for MMT success.') %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+
+```
+**Is this correct? Please check it. I may have made a mistake. Is it plausible that the estimates would change that much by method? Look at Malaysia - what is significant about how its estimate changes based on how we conduct the pooling?** 
+
+Lets make some graphs: 
+
+
+It is very useful to use these kinds of figures to see if group level effects even matter: 
+
+```{r figintonlymmt, fig.cap ='Intercept-only, glm, Marshmallow result'}
+#mmt_int = glmer(marsh_sr ~ 1 + (1|location), family = binomial, data = DFsm)
+#summary(mmt_int)
+lattice::dotplot(ranef(mmtloc_glmer, condVar = T), strip = T, scales=list(relation='free'))$location
+```
+
+
+
+Here is a more old school way to convey the same kind of information: 
+
+
+```{r}
+u0 <-ranef(mmtloc_glmer, condVar = TRUE)
+u0se <-sqrt(attr(u0[[1]], "postVar")[1, , ]) 
+commid <-as.numeric(rownames(u0[[1]])) 
+u0tab <- cbind("commid" = commid, "u0" = u0[[1]], "u0se" = u0se) 
+colnames(u0tab)[2] <-"u0"
+u0tab <-u0tab[order(u0tab$u0), ]
+u0tab <-cbind(u0tab, c(1:dim(u0tab)[1]))
+u0tab <-u0tab[order(u0tab$commid), ]
+colnames(u0tab)[4] <-"u0rank"
+
+# plot(u0tab$u0rank, u0tab$u0, type = "n", xlab = "u_rank", ylab = "Estimated residuals", ylim = c(-2, 2)) +
+# segments(u0tab$u0rank, u0tab$u0 -1.96*u0tab$u0se, u0tab$u0rank, u0tab$u0 + 1.96*u0tab$u0se)+
+# points(u0tab$u0rank, u0tab$u0, col = "blue")+
+# abline(h = 0, col = "red")
+
+u0tab$names = rownames(u0tab)
+plot(u0tab$u0rank, u0tab$u0, type = "n", xlab = "u_rank", ylab = "Estimated residuals", ylim = c(-2, 2)) +
+segments(u0tab$u0rank, u0tab$u0 -1.96*u0tab$u0se, u0tab$u0rank, u0tab$u0 + 1.96*u0tab$u0se)+
+points(u0tab$u0rank, u0tab$u0, col = "blue")+
+abline(h = 0, col = "red")+
+  axis(3, labels = u0tab$names, at = u0tab$u0rank)
+
+
+```
+
+Note, when you call summary of a model fit with lmer or glmer, the coefficients for the random effects are not displayed. This can be frustrating because sometimes you want to quickly compare what the group level effects are in your mixed-model to those from your model that entered the fieldsites as fixed categorical factors. 
+
+To display the random effects for a model simply type ranef(modelnamehere). 
+You will see plenty of that in the code here. 
+
+### adding effects 
+
+This is a logistic regression predicting the odds of having waited during the marshmallow task
+The predictors are: age, sex, reading, math, location
+
+```{r tabmarshmod1}
+mmt_glm1 = glm(marsh_sr ~ age_yr +sex+reading_total +math_total+location2, family = binomial, data = DFsm)
+xx=summary(mmt_glm1)
+coefs = xx$coefficients
+m_out = data.frame(`Exp(Est)` = exp(coefs[,1]), Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable(., caption = "Logistic regression on probability the marshmallow was eaten") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+Some notes on these results:
+
++ significant location effects for Austin and Vanuatu. who are both significantly less likely to eat the treat than Manipur. 
++ age has a net positive effect on the odds 
+
+Here's the same in glmer format: 
+
+```{r mmtglmer1}
+mmt_glmer1 = glmer(marsh_sr ~ age_yr +sex+reading_total +math_total+(1|location2), family = binomial, data = DFsm)
+tab_model(mmt_glmer1)
+
+lattice::dotplot(ranef(mmt_glmer1, condVar = T), strip = T, scales=list(relation='free'))$location2
+
+```
+
+Here's the same in glmer format but with town and village combined for Tanna: 
+
+```{r}
+mmt_glmer2 = glmer(marsh_sr ~ age_yr +sex+reading_total +math_total+(1|location), family = binomial, data = DFsm)
+tab_model(mmt_glmer2)
+
+lattice::dotplot(ranef(mmt_glmer2, condVar = T), strip = T, scales=list(relation='free'))$location
+
+```
+
+
+# HTKS Figure
+
+We should do a similar process for the HTKS. 
+
+```{r figintonlyhtks, fig.cap='Intercept-only, glm, HTKS score'}
+htks_int = glmer(HTKS ~ 1 + (1|location2), family = poisson, data = DFsm)
+
+lattice::dotplot(ranef(htks_int, condVar = T), strip = T, scales=list(relation='free'))$location2
+
+#lattice::dotplot(ranef(htksmathage_z.lmer, condVar = T), strip = T, scales=list(relation='free'))$location
+```
+
+As with the htks lets make the smae figure but with Tanna village and town combined again 
+
+```{r}
+htks_int2 = glmer(HTKS ~ 1 + (1|location), family = poisson, data = DFsm)
+
+lattice::dotplot(ranef(htks_int2, condVar = T), strip = T, scales=list(relation='free'))$location
+
+#lattice::dotplot(ranef(htksmathage_z.lmer, condVar = T), strip = T, scales=list(relation='free'))$location
+```
+
+Looking at some HTKS figures
+
+```{r htks fig}
+ggplot(DFsm, aes(age_yr, HTKS, color=sex)) +
+  stat_smooth(method = 'glm',method.args=list(family=poisson),
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3,alpha=0.3) +
+  facet_grid(.~location) + # includes tanna town and villages 
+  #coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+
+  #theme_wsj() + 
+  ggtitle("HTKS Task- Total score") +
+  ylab("Score") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+```
+In the above figure (HTKS) the main finding is simply the consistently rising slopes with age. WE did not yet do a test to compare the steepness of the slopes but visually they are roughly similar and all plausibly following developmental trajectories. 
+Note: there are site-level differences in mean score. A previous version of this figure had a zero for a four year old in the Manipur data. this was treated as a missing value. 
+
+Next lets check out ppts score on the htks in part i, ii, and iii separately
+
+
+## OLD STUFF: IGNORE 
+
+#### HTKS model
+
+Lets fit poisson and quasipoisson models
+
+Poisson: 
+```{r HTKS model poisson1}
+htkspoi1 = glm(HTKS ~ age_yr +sex+location, family = quasipoisson, data = DFsm)
+xx=summary(htkspoi1)
+coefs = xx$coefficients
+m_out = data.frame(Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+```{r HTKS poisson2}
+htkspoi2 = glm(HTKS ~ age_yr +sex+reading_z +math_z+location, family = quasipoisson, data = DFsm)
+xx=summary(htkspoi2)
+coefs = xx$coefficients
+m_out = data.frame(Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+And i wonder if keeping sites as a fixed categorical variable even makes sense? 
+
+```{r htksmlm1}
+htksmlm1 = glmer(HTKS ~ 1+ (1|location), family = poisson, data = DFsm)
+
+# its debatable if we need to do these as glmer poission and just just lmer 
+htksmlm2 = glmer(HTKS ~ age_yr +sex+reading_z + math_z + (1|location), family = poisson, data = DFsm)
+tab_model(htksmlm1, htksmlm2)
+
+```
+
+
+
+
+
+### second marshmallow model 
+Let's revisit the marshmallow in light of HTKS score: 
+
+```{r marshmod2}
+# previously we just used the raw data for reading and math. 
+marshmod2 = glm(yn_mmt ~ age_yr +sex+reading_z +math_z +HTKS+location, family = binomial, data = DFsm)
+xx=summary(marshmod2)
+coefs = xx$coefficients
+m_out = data.frame(ExpEsp = exp(coefs[,1]), Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+When HTKS score is in the model with reading and writing (the raw scores), the 'self reg' or 'inhibition' captured by the HTKS score seems to have little to do with the probability that a kid ate the treat.
+There are significant site level differences, with Austin and Vanuatu having lower odds of eating the marshmallow than India. Recall the coefficients from above, do they look much different? (this question no longer applies because i moved a bunch of stuff - BUT the idea that we check whats happening with the coefficients once we get things more organized here, is good to keep in mind) 
+
+Lots of site level variation. 
+
+```{r}
+marshmlm = glmer(yn_mmt ~ age_yr +sex+reading_z +math_z +HTKS + (1|location), family = binomial, data = DFsm)
+summary(marshmlm)
+
+```
+
+
+
+### A third Marshmallow model
+What happens if we exclude the academic tests?
+In this model we keep the HTKS score and drop the academic knowledge tests. 
+```{r marshmod3}
+marshmod3 = glm(yn_mmt ~ age_yr +sex+HTKS+location, family = binomial, data = DFsm)
+xx=summary(marshmod3)
+coefs = xx$coefficients
+m_out = data.frame(ExpEst = exp(coefs[,1]), Estimate = coefs[,1], StandError = coefs[,2],  
+                    Pval = coefs[,4])
+m_out = round(m_out,3) 
+m_out %>% kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+HTKS still has no relationship with the outcome on the Marshmallow test. 
+And the same site level effects are till there, perhaps the coefficient for Vanuatu went down a bit but the results on the site level coefficients are pretty similar. Why doesn't including or excluding education change the site-level effect on eating the treat?
+Obviously we'll have to follow up on t his with a more robust modeling framework, but its interesting. 
+Note that the coefficients for Vanuatu and Austin really aren't that different after we remove the math and reading scores. 
+
+
+
+
+### new thing to try
+Let's show a plot or two where the lines can vary: 
+
+```{r newhtksplots}
+qplot(x = age_yr2, y = HTKS, color = location, data = DFsm) +
+  stat_smooth(method = "lm", se = FALSE, fullrange = TRUE) + 
+  theme_minimal() + 
+  geom_jitter(alpha = 0.50, size=2, width = 0.2, height = 0.2) +
+  ggtitle("HTKS and Age") +
+  xlab("Age (years)") +
+  ylab("Score") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+
+qplot(x = age_yr2, y = yn_mmt, color = location, data = DFsm) +
+  stat_smooth(method = "glm", se = FALSE, fullrange = TRUE) + 
+  theme_minimal() + 
+  geom_jitter(alpha = 0.50, size=2, width = 0.2, height = 0) +
+  ggtitle("Waiting for a Marshmallow and Age") +
+  xlab("Age (years)") +
+  ylab("Pr(They did not wait)") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+
+
+#qplot(x = age_yr2, y = math_total, color = location, data = DFsm) +
+#  stat_smooth(method = "lm", se = FALSE, fullrange = TRUE) + 
+#  theme_minimal()
+
+qplot(x = age_yr2, y = math_total, color = location, data = DFsm) +
+  stat_smooth(method = "lm", se = FALSE, fullrange = TRUE) + 
+  theme_minimal() + 
+  geom_jitter(alpha = 0.50, size=2, width = 0.2, height = 0.2) +
+  ggtitle("Math Assessment and Age") +
+  xlab("Age (years)") +
+  ylab("Score") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+
+
+#qplot(x = math_total, y = HTKS, color = location, data = DFsm) +
+#  stat_smooth(method = "lm", se = FALSE, fullrange = TRUE) + 
+#  theme_minimal()
+
+qplot(x = math_total, y = HTKS, color = location, data = DFsm) +
+  stat_smooth(method = "lm", se = FALSE, fullrange = TRUE) + 
+  theme_minimal() + 
+  geom_jitter(alpha = 0.50, size=2, width = 0.2, height = 0.2) +
+  ggtitle("HTKS and Math Assessment") +
+  xlab("Math Score") +
+  ylab("HTKS Score") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+
+
+
+```
+
+
+On June 22 we stepped back into this in order to quickly redo this model. 
+**We should zscore the predictors and check for interactions** 
+
+```{r}
+htksage_z <- glm(HTKS ~ location * age_z, family = quasipoisson, data = DFsm)
+summary(htksage_z)
+
+htksmath_z <- glm(HTKS ~ location * math_z, family = quasipoisson, data = DFsm)
+summary(htksmath_z) # compare this result to the previous. that's really the main thing for now. 
+
+htksmathage_z <- glm(HTKS ~ sex + location * math_z * age_z, family = quasipoisson, data = DFsm)
+summary(htksmathage_z)
+
+htksreadage_z <- glm(HTKS ~ sex + location * reading_z * age_z, family = quasipoisson, data = DFsm)
+summary(htksreadage_z)
+
+
+```
+```{r}
+htksmathage_z.lmer <- lmer(HTKS ~ sex + math_z * age_z + (1|location), data = DFsm)
+summary(htksmathage_z.lmer)
+
+```
+
+```{r}
+htks_int = glmer(HTKS ~ 1 + (1|location), family = poisson, data = DFsm)
+
+lattice::dotplot(ranef(htks_int, condVar = T), strip = T, scales=list(relation='free'))$location
+
+
+lattice::dotplot(ranef(htksmathage_z.lmer, condVar = T), strip = T, scales=list(relation='free'))$location
+```
+
+```{r}
+mmt_int = glmer(yn_mmt ~ 1 + (1|location), family = binomial, data = DFsm)
+summary(mmt_int)
+lattice::dotplot(ranef(mmt_int, condVar = T), strip = T, scales=list(relation='free'))$location
+
+lattice::dotplot(ranef(marshmlm, condVar = T), strip = T, scales=list(relation='free'))$location
+```
+
+An old school approach, from that LEMMA thing at Bristol
+I wanted to make sure that the short cut above was giving what i thought it was: 
+
+```{r}
+u0 <-ranef(mmt_int, condVar = TRUE)
+u0se <-sqrt(attr(u0[[1]], "postVar")[1, , ]) 
+commid <-as.numeric(rownames(u0[[1]])) 
+u0tab <- cbind("commid" = commid, "u0" = u0[[1]], "u0se" = u0se) 
+colnames(u0tab)[2] <-"u0"
+u0tab <-u0tab[order(u0tab$u0), ]
+u0tab <-cbind(u0tab, c(1:dim(u0tab)[1]))
+u0tab <-u0tab[order(u0tab$commid), ]
+colnames(u0tab)[4] <-"u0rank"
+
+plot(u0tab$u0rank, u0tab$u0, type = "n", xlab = "u_rank", ylab = "Estimated residuals", ylim = c(-2, 2)) +
+segments(u0tab$u0rank, u0tab$u0 -1.96*u0tab$u0se, u0tab$u0rank, u0tab$u0 + 1.96*u0tab$u0se)+
+points(u0tab$u0rank, u0tab$u0, col = "blue")+
+abline(h = 0, col = "red")
+
+u0tab$names = rownames(u0tab)
+plot(u0tab$u0rank, u0tab$u0, type = "n", xlab = "u_rank", ylab = "Estimated residuals", ylim = c(-2, 2)) +
+segments(u0tab$u0rank, u0tab$u0 -1.96*u0tab$u0se, u0tab$u0rank, u0tab$u0 + 1.96*u0tab$u0se)+
+points(u0tab$u0rank, u0tab$u0, col = "blue")+
+abline(h = 0, col = "red")+
+  axis(3, labels = u0tab$names, at = u0tab$u0rank)
+
+
+```
+
+
+# EM Self reg exploring:
+First we want to split Tanna up into villages and town. 
+Next we want to look at sample sizes across the self reg tasks as not all the kids did these as they came later in the sample. 
+Then lest look at mmt and htks data separately. 
+
+Split Tanna by village and town 
+```{r splitting Tanna by town and village}
+# lets try and split Tanna up so that rather than location being Vanuatu we make it Tanna_town and Tanna_villages
+#First create a new column where the towns and villages are indicated from loc column in the Tanna pid registry
+DFsm = mutate(DFsm, Tanna_loc = case_when(loc == "Lenekel" ~ "_town",
+                                          loc == "Lenaulaul" ~ "_villages",
+                                          loc == "Ikunala" ~ "_villages"))
+# next we need to combine this information into a new location column and replace Vanuatu with this info while keeping the other sites as the same.
+DFsm$location2 = paste0(DFsm$location, DFsm$Tanna_loc)
+# this gives us the locations altogether but it has NA at the end and i can't delete this with NA omit or any other gsub removal options so going the long way around and mutating the previous column instead.
+
+DFsm = mutate(DFsm, location2 = case_when(location2 == "Vanuatu_town" ~ "VA_town",
+                                          location2 == "Vanuatu_villages" ~ "VA_villages",
+                                          location2 == "MalaysiaNA" ~ "Malaysia",
+                                          location2 == "GhanaNA" ~ "Ghana",
+                                          location2 == "IndiaNA" ~ "India",
+                                          location2 == "AustinNA" ~ "Austin"))
+# check the attributes of the location column
+#str(DFsm$location2)
+#make the location column a factor. 
+DFsm = DFsm %>%
+  mutate(location2 = as.factor(location2))
+
+
+# the following is old script trying to get NA out before just mutating the data as none of these would work. 
+#DFsm$location2 <- gsub("NA,", "", DFsm$location2)
+#DFsm$location2  <- gsub("^(NA,)+", "", DFsm$location2)
+#DFsm$location2 %>% replace(. == "NA", NA) %>% na.omit
+
+
+```
+
+First lets look at the Marshmallow data
+## Switch MMT coding 
+Here we are creating a new mmt measure of effective self reg rather than if the kids eat the mmt or not. 
+```{r marshexploreEM}
+# What does y and n mean in the yn_mmt columns?
+# DFsm$yn_mmt # y/n column. Commented out when not using. 
+# DFsm$treat_eat # raw data. Commented out when not using.  
+# it looks like p is coded as NaN, n is coded as 0 and y is coded as 1 when comparing the yn_mmt with the raw treat_eat 
+# as y they ate it or p means they partially ate it in these two cases the ppt's is demonstrating lower self regulation we need to flip this score so n = 1 and y and p = 0. Then we can compare higher scores on the mmt with higher scores on the htks indicating better self reg. 
+# flipping the score and creating a new self-reg column for the mmt: 
+DFsm = mutate(DFsm, marsh_sr = case_when(treat_eat == "y" ~ "0",
+                                            treat_eat == "n" ~ "1",
+                                            treat_eat == "p" ~ "0"))
+# check that worked?
+# DFsm$marsh_sr # compare the new column with the raw data.Commented out when not using
+# DFsm$treat_eat # raw data  Commented out when not using. 
+# check to find out what column is being read as
+#str(DFsm$marsh_sr) # says its character want it as numeric to generate mean
+DFsm = DFsm %>%
+  mutate(marsh_sr = as.numeric(marsh_sr)) # converting to numeric 
+
+```
+Let's look at some basic frequencies with this new sr measure. 
+```{r tanna combined}
+table(DFsm %>% select(marsh_sr, location))
+```
+
+```{r tanna split}
+table(DFsm %>% select(marsh_sr, location2))
+```
+## Sample sizes- MMT
+```{r Sample sizes for MMT by site with age and sex}
+mmt_sample = DFsm %>%
+  dplyr::select(PID, location2, sex, ageclass, yn_mmt) %>%
+  mutate(Age = as.factor(ageclass))%>%
+  filter(!is.na(Age))%>%
+  group_by(location2,sex,Age)%>%
+  summarize(agesex_count = n()) 
+head(mmt_sample)
+
+# add percent
+mmt_sample = mmt_sample %>%
+  group_by(location2, add=F) %>%
+  mutate(percent=round(100*agesex_count/sum(agesex_count),1))
+
+mmt_sample = ggplot(data=mmt_sample, aes(x=sex, y=agesex_count, fill=Age), na.rm = TRUE)
+
+mmt_sample+
+  geom_bar(aes(fill=fct_reorder(Age, desc(Age))),stat="identity", colour="black")+
+  xlab('Gender') + ylab('Count') +
+  theme_minimal()+
+  theme(panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+  facet_wrap( ~ location2, ncol=5) +
+  ggtitle("Sample sizes for marshmallow by age class, gender, and location") +
+  ylab("Count") +
+  xlab("Gender") +
+    theme(axis.title = element_text(angle = 90, vjust = -0.075),
+          axis.title.x = element_text(angle = 0, size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          plot.title = element_text(size = 20, face = "bold"))+
+    theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+
+```
+It looks like Tanna village and Tanna town sample sizes are relatively comparable to Austin.  
+
+## Explore MMT data
+First when Tanna is grouped together
+Note that we are lookign at self reg measures here so higher the score the more effective the ppt's self reg. 
+```{r exploringmarshEM}
+DFsm %>% group_by(location, sex) %>% 
+  summarize(waited = mean(marsh_sr, na.rm=T),
+            htksmean = mean(HTKS, na.rm=T)) %>%
+             ungroup %>%
+  mutate(across(where(is.numeric), ~round(.x,2))) %>% #comment out this section to get table and not kable
+  kable(., caption = 'Site level self regulation: marshmallow success and mean HTKS score by sex') %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) 
+```
+
+Now when Tanna is split into village and town 
+```{r exploringmarshEM_tannasplit}
+DFsm %>% group_by(location2, sex) %>% # location2 gives you Tanna split by town and village and location with it together 
+  summarize(waited = mean(marsh_sr, na.rm=T),
+            htksmean = mean(HTKS, na.rm=T)) %>%
+             ungroup %>%
+  mutate(across(where(is.numeric), ~round(.x,2))) %>% #comment out this section to get table and not kable
+  kable(., caption = 'Site level self regulation: marshmallow success and mean HTKS score by sex') %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) 
+```
+
+Now for some plots first kids self reg scores in the mmt when Tanna is grouped 
+```{r marshEM, fig.height = 6, fig.width = 11}
+# EM Marsh Fig
+#DFmarshtemp = DFsm %>% filter(age_yr <= 12 & age_yr >=5)
+ggplot(DFsm, aes(age_yr, marsh_sr, color=sex)) +
+  stat_smooth(method="glm", family = binomial, formula=y~x,
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.01, width=0.01), size=3, alpha=0.3) +
+ # xlab("Age") + ylab("Pr (Ate It)") + 
+  facet_grid(.~location) +
+  coord_cartesian(ylim = c(-0.05, 1.05))+
+  theme_minimal()+  
+  #theme_wsj() + 
+  ggtitle("Marshmallow Task") +
+  ylab("Pr (waited)") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+#ggsave('marshmallow.png',width=9, height=3.5,units = 'in')
+
+```
+
+
+
+Next this is what happens when we split Tanna - interesting how different town and village are trending.
+```{r marshEM Tanna split}
+# EM marsh fig with tanna as town and village 
+#DFmarshtemp = DFsm %>% filter(age_yr <= 12 & age_yr >=5)
+ggplot(DFsm, aes(age_yr, marsh_sr, color=sex)) +
+  stat_smooth(method="glm", family = binomial, formula=y~x,
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.01, width=0.01), size=3, alpha=0.3) +
+ # xlab("Age") + ylab("Pr (Ate It)") + 
+  facet_grid(.~location2) +
+  coord_cartesian(ylim = c(-0.05, 1.05))+
+  theme_minimal()+  
+  #theme_wsj() + 
+  ggtitle("Marshmallow Task") +
+  ylab("Pr (waited)") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+#ggsave('marshmallow.png',width=9, height=3.5,units = 'in')
+
+```
+Next up some analyses about these trends I'll show results with Tanna combined and it split.
+We will start with just looking at the main effect of location and will come back to the other main effects and interactions later.  
+
+First lets do a glm with only location fixed-effects when Tanna is combined 
+```{r mmt glm loc tan_com}
+mmtloc_glm_tc = glm(marsh_sr ~ 1 + location, family = binomial, data = DFsm)
+tidy(mmtloc_glm_tc)
+```
+
+Next a glm with only location fixed-effects when Tanna is split 
+```{r mmt glm loc tan_split}
+mmtloc_glm_ts = glm(marsh_sr ~ 1 + location2, family = binomial, data = DFsm)
+tidy(mmtloc_glm_ts)
+```
+
+As the intercept in both of these is Manipur lets have a look at some pairwise comparisons among the sites (need to make sure emmenas is included in libraries at the start!) This is not set in stone and is instead a potential option to look at the effects in more detail. 
+First with Tanna combined
+```{r mmt emmeans tan_comb}
+library(emmeans)
+# comparisons or contrasts among effects. EMMs are also known as least-squares means.
+lsmeans(mmtloc_glm_tc, pairwise~location, adjust="tukey") #include Tukey adjustment for multiple comparisons
+```
+
+Next with Tanna split
+```{r mmt emmeans tan_split}
+lsmeans(mmtloc_glm_ts, pairwise~location2, adjust="tukey")
+```
+
+Adding in the other main effects (age and sex) next.
+
+
+Next lets look at the HTKS
+## Sample sizes- HTKS
+```{r Sample sizes for HTKS by site with age and sex}
+htks_sample = DFsm %>%
+  dplyr::select(PID, location2,sex,ageclass,HTKS) %>%
+  mutate(Age = as.factor(ageclass))%>%
+  filter(!is.na(Age))%>%
+  group_by(location2,sex,Age)%>%
+  summarize(agesex_count = n()) 
+head(htks_sample)
+
+# add percent
+htks_sample = htks_sample %>%
+  group_by(location2, add=F) %>%
+  mutate(percent=round(100*agesex_count/sum(agesex_count),1))
+
+htks_sample = ggplot(data=htks_sample, aes(x=sex, y=agesex_count, fill=Age), na.rm = TRUE)
+
+htks_sample+
+  geom_bar(aes(fill=fct_reorder(Age, desc(Age))),stat="identity", colour="black")+
+  xlab('Gender') + ylab('Count') +
+  theme_minimal()+
+  theme(panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+  facet_wrap( ~ location2, ncol=5) +
+  ggtitle("Sample sizes for htks by age class, gender, and location") +
+  ylab("Count") +
+  xlab("Gender") +
+    theme(axis.title = element_text(angle = 90, vjust = -0.075),
+          axis.title.x = element_text(angle = 0, size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          plot.title = element_text(size = 20, face = "bold"))+
+    theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+
+```
+Again sample sizes for Tanna with Town and village plit are similar to what we have in Austin.
+
+Here are those self reg means again
+```{r exploringselfregEM}
+DFsm %>% group_by(location, sex) %>% 
+  summarize(waited = mean(marsh_sr, na.rm=T),
+            htksmean = mean(HTKS, na.rm=T)) %>%
+             ungroup %>%
+  mutate(across(where(is.numeric), ~round(.x,2))) %>% #comment out this section to get table and not kable
+  kable(., caption = 'Site level self regulation: marshmallow success and mean HTKS score by sex') %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) 
+```
+
+Now for some plots first kids self reg scores in the HTKS when Tanna is grouped 
+```{r htks_all, fig.height = 6, fig.width = 11}
+ggplot(DFsm, aes(age_yr, HTKS, color=sex)) +
+  stat_smooth(method = 'glm',method.args=list(family=poisson),
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3,alpha=0.3) +
+  facet_grid(.~location) +
+  #coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+
+  #theme_wsj() + 
+  ggtitle("HTKS All Phases Grouped") +
+  ylab("HTKS Score") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+
+```
+
+Same graph but with Tanna split
+```{r htks_all_VA_split, fig.height = 6, fig.width = 11}
+ggplot(DFsm, aes(age_yr, HTKS, color=sex)) +
+  stat_smooth(method = 'glm',method.args=list(family=poisson),
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3,alpha=0.3) +
+  facet_grid(.~location2) +
+  #coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+
+  #theme_wsj() + 
+  ggtitle("HTKS All Phases Grouped") +
+  ylab("HTKS Score") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+```
+
+Next up some analyses about these trends
+ I'll show results with Tanna combined and it split.
+We will start with just looking at the main effect of location and will come back to the other main effects and interactions later.  
+
+First lets do a glm with only location fixed-effects when Tanna is combined 
+```{r htks glm loc tan_com}
+htksloc_glm_tc = glm(HTKS ~ 1 + location, family = poisson, data = DFsm)
+tidy(htksloc_glm_tc)
+```
+Next a glm with only location fixed-effects when Tanna is split 
+```{r htks glm loc tan_split}
+htksloc_glm_ts = glm(HTKS ~ 1 + location2, family = poisson, data = DFsm)
+tidy(htksloc_glm_ts)
+```
+
+As the intercept in both of these is Manipur lets have a look at some pairwise comparisons among the sites (need to make sure emmenas is included in libraries at the start!) This is not set in stone and is instead a potential option to look at the effects in more detail. 
+First with Tanna combined
+```{r htks emmeans tan_comb}
+library(emmeans)
+# comparisons or contrasts among effects. EMMs are also known as least-squares means.
+lsmeans(htksloc_glm_tc, pairwise~location, adjust="tukey") #include Tukey adjustment for multiple comparisons
+```
+
+
+
+
+
+Next for some exploration around the different performance across parts i-iii looking at the cognitive load as this task gets harder. 
+
+First lets look at the sample sizes across part i-iii
+```{r htks part i sample}
+htks_i_sample = DFsm %>%
+  dplyr::select(PID, location2, sex, ageclass, part_i) %>%
+  mutate(Age = as.factor(ageclass))%>%
+  filter(!is.na(Age))%>%
+  group_by(location2,sex,Age)%>%
+  summarize(agesex_count = n()) 
+head(htks_i_sample)
+# add percent
+htks_i_sample = htks_i_sample %>%
+  group_by(location2, add=F) %>%
+  mutate(percent=round(100*agesex_count/sum(agesex_count),1))
+
+htks_i_sample = ggplot(data=htks_i_sample, aes(x=sex, y=agesex_count, fill=Age), na.rm = TRUE)
+
+htks_i_sample+
+  geom_bar(aes(fill=fct_reorder(Age, desc(Age))),stat="identity", colour="black")+
+  xlab('Gender') + ylab('Count') +
+  theme_minimal()+
+  theme(panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+  facet_wrap( ~ location2, ncol=5) +
+  ggtitle("Sample sizes for htks_part_i by age class, gender, and location") +
+  ylab("Count") +
+  xlab("Gender") +
+    theme(axis.title = element_text(angle = 90, vjust = -0.075),
+          axis.title.x = element_text(angle = 0, size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          plot.title = element_text(size = 20, face = "bold"))+
+    theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+
+```
+
+```{r htks part ii sample}
+htks_ii_sample = DFsm %>%
+  dplyr::select(PID, location2, sex, ageclass, part_ii) %>%
+  mutate(Age = as.factor(ageclass))%>%
+  filter(!is.na(Age))%>%
+  group_by(location2,sex,Age)%>%
+  summarize(agesex_count = n()) 
+head(htks_ii_sample)
+# add percent
+htks_ii_sample = htks_ii_sample %>%
+  group_by(location2, add=F) %>%
+  mutate(percent=round(100*agesex_count/sum(agesex_count),1))
+
+htks_ii_sample = ggplot(data=htks_ii_sample, aes(x=sex, y=agesex_count, fill=Age), na.rm = TRUE)
+
+htks_ii_sample+
+  geom_bar(aes(fill=fct_reorder(Age, desc(Age))),stat="identity", colour="black")+
+  xlab('Gender') + ylab('Count') +
+  theme_minimal()+
+  theme(panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+  facet_wrap( ~ location2, ncol=5) +
+  ggtitle("Sample sizes for htks_part_ii by age class, gender, and location") +
+  ylab("Count") +
+  xlab("Gender") +
+    theme(axis.title = element_text(angle = 90, vjust = -0.075),
+          axis.title.x = element_text(angle = 0, size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          plot.title = element_text(size = 20, face = "bold"))+
+    theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+
+```
+
+```{r htks part iii sample}
+htks_iii_sample = DFsm %>%
+  dplyr::select(PID, location2, sex, ageclass, part_iii) %>%
+  mutate(Age = as.factor(ageclass))%>%
+  filter(!is.na(Age))%>%
+  group_by(location2,sex,Age)%>%
+  summarize(agesex_count = n()) 
+head(htks_iii_sample)
+# add percent
+htks_iii_sample = htks_iii_sample %>%
+  group_by(location2, add=F) %>%
+  mutate(percent=round(100*agesex_count/sum(agesex_count),1))
+
+htks_iii_sample = ggplot(data=htks_iii_sample, aes(x=sex, y=agesex_count, fill=Age), na.rm = TRUE)
+
+htks_iii_sample+
+  geom_bar(aes(fill=fct_reorder(Age, desc(Age))),stat="identity", colour="black")+
+  xlab('Gender') + ylab('Count') +
+  theme_minimal()+
+  theme(panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+  facet_wrap( ~ location2, ncol=5) +
+  ggtitle("Sample sizes for htks_part_iii by age class, gender, and location") +
+  ylab("Count") +
+  xlab("Gender") +
+    theme(axis.title = element_text(angle = 90, vjust = -0.075),
+          axis.title.x = element_text(angle = 0, size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          plot.title = element_text(size = 20, face = "bold"))+
+    theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0))
+
+```
+
+Next graph htks scores across parts i-iii
+
+First part i aka Heads Toes 
+```{r htks_part_i, fig.height = 6, fig.width = 11}
+ggplot(DFsm, aes(age_yr, part_i, color=sex)) +
+  stat_smooth(method = 'glm',method.args=list(family=poisson),
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3,alpha=0.3) +
+  facet_grid(.~location2) +
+  #coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+
+  #theme_wsj() + 
+  ggtitle("HTKS Task-Part i: HTT") +
+  ylab("Part 1 Score") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+```
+
+Next part ii aka Heads Toes knees shoulders 
+```{r htks_part_ii, fig.height = 6, fig.width = 11}
+ggplot(DFsm, aes(age_yr, part_ii, color=sex)) +
+  stat_smooth(method = 'glm',method.args=list(family=poisson),
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3,alpha=0.3) +
+  facet_grid(.~location2) +
+  #coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+
+  #theme_wsj() + 
+  ggtitle("HTKS Task:part ii: HTKS") +
+  ylab("Part 2 Score") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+```
+
+Last part iii aka cognitive load when the rules switch 
+```{r htks_part_iii, fig.height = 6, fig.width = 11}
+ggplot(DFsm, aes(age_yr, part_iii, color=sex)) +
+  stat_smooth(method = 'glm',method.args=list(family=poisson),
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3,alpha=0.3) +
+  facet_grid(.~location2) +
+  #coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+
+  #theme_wsj() + 
+  ggtitle("HTKS Task: part iii: HTKS Switch") +
+  ylab("Part 3 Score") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 18, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 18, colour = "black", angle = 270))
+```
+
+
+## Acadmeic with Tanna location split
+Lets look at the academic with Tanna split by towns and villages 
+```{r AKA_tansplit}
+# first need to add in location2 to df_aka_c dataframe from DFsm dataframe join with PID 
+# make a new dataframe with just pid and location 2
+SR_newlocation <- DFsm %>%
+  select(PID, location2)
+# add location2 into the df_aka_c dataframe using PID to combine
+df_aka_loc <- merge(df_aka_c, SR_newlocation, by = "PID")
+
+``` 
+
+```{r AKA_tansplitbyage}
+# Plot by Academic by age and location
+df_aka_c2 = df_aka_loc %>% filter(test %in% c('Reading_c','Math_c'))
+ggplot(df_aka_c2, aes(age_yr, score, color=sex)) +
+  stat_smooth(method="loess", formula=y~x,
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3, alpha=0.3) +
+  xlab("Age") + ylab("Test score") + 
+  facet_grid(test~location2, scales = 'free') +
+  # coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+  
+  #theme_wsj() + 
+  ggtitle("Math and reading assessment") +
+  ylab("Score, mean centered") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 16, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 16, colour = "black", angle = 270))
+
+```
+
+```{r AKA_tansplitbyage_noncentred}
+# Plot by Academic by age and location
+df_aka_c2 = df_aka_loc %>% filter(test %in% c('Reading','Math'))
+ggplot(df_aka_c2, aes(age_yr, score, color=sex)) +
+  stat_smooth(method="loess", formula=y~x,
+              alpha=0.2, size=2, aes(fill=sex)) +
+  geom_point(position=position_jitter(height=0.02, width=0.02),size=3, alpha=0.3) +
+  xlab("Age") + ylab("Test score") + 
+  facet_grid(test~location2, scales = 'free') +
+  # coord_cartesian(ylim = c(-0.25, 1.25))+
+  theme_minimal()+  
+  #theme_wsj() + 
+  ggtitle("Math and reading assessment") +
+  ylab("Raw Score") +
+  xlab("Age") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 20, face = "bold"))+
+  theme(strip.text.x = element_text(size = 16, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 16, colour = "black", angle = 270))
+
+```
+
+```{r groupedcorrelationAKA_tansplit, echo=TRUE}
+DFsm %>% group_by(location2) %>% 
+  summarize(correlation = cor(math_cent, reading_cent, use = "complete.obs")) %>%
+  kable(., caption = 'Correlation between math and reading scores for each fieldsite')
+
+
+```
+
+#Look at these correlations in more detail and plot them out 
+```{r figakascores_tansplit}
+ggplot(DFsm, aes(x = math_cent, y = reading_cent, color = location2))+geom_point()+geom_smooth(method='lm')+
+  labs(title = 'Math and reading score relationship for each site, centered values')
+
+ggplot(DFsm, aes(x = math_total, y = reading_total, color = location2))+geom_point()+geom_smooth(method='lm')+
+  labs(title = 'Math and reading score relationship for each site, raw values')
+
+
+```
+
+
+# New SR Analyses 
+First of all we want to make dataframes with just the variables of interest in the MMT and HTKS
+We will take each one of these tasks seperately to do these analyses are we are askign different questions
+
+
+```{r add in years of schooling genrated number}
+DFsm = DFsm %>% mutate(ed_sim = (runif(length(DFsm[,1]), -.2,.5)+1)*DFsm$age_yr -7)
+
+```
+
+
+## Marshmallow
+```{r new mmt dataframe}
+#names(DFsm)
+DFmmt <- DFsm %>%
+  select(PID, location2, age_yr, ageclass, ed_sim, sex, marsh_sr, reading_z, math_z, reading_cent, math_cent, reading_total, math_total)
+DFmmt <- drop_na(DFmmt)#remove NAs in mmt dataset. 
+```
+
+
+```{r mmt sample sizes}
+#Check sample size
+DFmmt%>%
+  group_by(location2) %>% # group by location to get numbers of females, and mean age and sd 
+  summarise(nfemale = sum(sex =="f"), nmale = sum(sex == 'm'), age_mean = mean(age_yr), age_sd = sd(age_yr), age_range = range(age_yr)) 
+
+```
+
+Success at the marshmallow task
+Proportion of marshmallow task successes across site (0 = ate it (failed), 1 = waited (success))
+```{r mmt success across sites}
+
+#mmtsuccess <- table(DFmmt$location2,DFmmt$marsh_sr)
+#mmtsuccess
+# need to add in sample sizes to this table and change the labels too. 
+#levels(DFmmt$marsh_sr)
+#levels(DFmmt$marsh_sr) <- c("Ate it", "Waited")
+
+DFmmt %>% group_by(location2, marsh_sr) %>%
+  summarise (n = n()) %>%
+  kable(., caption = 'Proportion of marshmallow task successes across site (0 = ate it (failed), 1 = waited (success))') %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) 
+
+# Graph the above 
+ggplot(data = DFmmt) + 
+  geom_bar(mapping = aes(x = marsh_sr, y = ..prop.., group = 1, fill = factor(..x..)), position="dodge",stat = "count")+
+  facet_grid(.~location2) +
+  scale_x_discrete(na.translate = FALSE) + 
+  theme_minimal() + 
+  ggtitle("Marshmallow success/fails") +
+  ylab("Proportion of Sample") +
+  xlab("Marshmallow") +
+  labs(fill = "Waited") +
+  theme(axis.title = element_text(angle = 90, vjust = -0.075),
+        axis.title.x = element_text(angle = 0, size = 9),
+        axis.title.y = element_text(size = 9),
+        axis.text = element_text(size = 9),
+        legend.text = element_text(size = 9),
+        legend.title = element_text(size = 9),
+        plot.title = element_text(size = 9, face = "bold"))+
+  theme(strip.text.x = element_text(size = 9, colour = "black", angle = 0),
+        strip.text.y = element_text(size = 9, colour = "black", angle = 270))
+
+
+```
+
+
+## HTKS
+```{r new HTKS dataframe}
+#names(DFsm)
+DFhtks <- DFsm %>%
+  select(PID, location2, age_yr, ageclass, sex, HTKS, part_i, part_ii, part_iii, reading_z, math_z, reading_cent, math_cent, reading_total, math_total, ed_sim)
+DFhtks <- drop_na(DFhtks)#remove NAs in htks dataset.  
+```
+
+
+```{r htks sample sizes}
+#Check sample size
+DFhtks%>%
+  group_by(location2) %>% # group by location to get numbers of females, and mean age and sd 
+  summarise(nfemale = sum(sex =="f"), nmale = sum(sex == 'm'), age_mean = mean(age_yr), age_sd = sd(age_yr), age_range = range(age_yr)) 
+
+
+```
+
+HTKS descriptive stats by site including mean and standard deviation
+```{r htks descriptive stats}
+# mean and sd age, sex, HTKS, reading_total, math_total, group by location with sample sizes indicated too. 
+#DFhtks %>% group_by(location2) %>% 
+   #select(age_yr, sex, HTKS, reading_total, math_total) %>%
+  #summarise_each(funs(mean, sd))
+options(digits = 3) #sets the general options for printing digits 
+# the following sets it up clearer
+DesHTKS <-DFhtks %>%
+  group_by(location2) %>% 
+   select(age_yr, sex, HTKS, reading_total, math_total) %>%
+  summarise(across(.cols = is.numeric, # the following lines gives you the means and SD of all the numeric columns 
+    .fns = list(Mean = mean, SD = sd), na.rm = TRUE, 
+    .names = "{col}_{fn}"
+    ))
+# from: https://www.datanovia.com/en/blog/dplyr-how-to-compute-summary-statistics-across-multiple-columns/
+
+t(DesHTKS) #transposing the columns and rows in the HTKS descriptive stats
+
+# get sample sizes for the fieldsites 
+DFhtks%>%
+  group_by(location2) %>%
+  count()
+
+#combine sample sizes and descriptive stats for the HTKS into one table
+
+```
+
+
+
+Performance at the HTKS
+```{r htks performance across sites}
+# Need to make a new dataframe with parts i-iii in rows and the total for each kid separately. 
+#names(DFhtks)
+htksperf <- DFhtks %>%
+  select(PID, location2, age_yr, sex, part_i, part_ii, part_iii, HTKS, math_cent, reading_cent, ageclass, ed_sim) %>%
+  pivot_longer(c(`part_i`, `part_ii`, `part_iii`, `HTKS`), names_to = "htks", values_to = "score")
+head(DFhtks) #check that worked
+
+DFhtks <- DFhtks %>%
+  mutate(part_i_ii = part_i + part_ii ) # adding in a new coulumn to the datafrmae which has parts i and ii togteehr too 
+
+# put this into a table
+htksperf %>% group_by(location2, htks) %>%
+  summarise (mean = mean(score)) %>%
+  #filter(!is.na(score))%>%
+  kable(., caption = 'Mean performance at the HTKS across sites and ages') %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) 
+#as_tibble(htksperf)
+
+#put this into a graph
+htksperf %>% 
+ group_by(PID, location2, ageclass, htks, score) %>%
+  ggplot(aes(x=ageclass, y = score, colour = location2)) +
+  geom_jitter() +
+  facet_wrap(~htks, scales = 'free') + 
+  geom_smooth(method = "glm") +
+  xlab('Age Class (years)') + ylab('Mean Total HTKS score') +
+  theme(legend.title = element_blank())
+
+```
+
+## HTKS correlations
+### Maths and HTKS
+```{r htks correlations and maths}
+htksperf %>% group_by(location2, htks) %>% 
+  summarize(correlation = cor(math_cent, score, use = "complete.obs")) %>%
+  kable(., caption = 'Correlation between HTKS total score and mathematics scores for each fieldsite')
+# Note if we want these to be the larger numbers you need to reformat digits options(digits = )
+
+```
+
+
+```{r plot correlation htks total and maths }
+ggplot(DFhtks, aes(x = HTKS, y = math_cent, color = location2))+geom_point()+geom_smooth(method='lm')+
+  labs(title = 'Maths and HTKS total score relationship for each site, centered values')
+```
+
+
+```{r plot correlation htks part 1 and 2 and maths}
+ggplot(DFhtks, aes(x = part_i + part_ii, y = math_cent, color = location2))+geom_point()+geom_smooth(method='lm')+
+  labs(title = 'Maths and HTKS part 1 and 2 score relationship for each site, centered values')
+```
+
+
+### Reading and HTKS 
+
+```{r htks correlations total and reading}
+htksperf %>% group_by(location2, htks) %>% 
+  summarize(correlation = cor(reading_cent, score, use = "complete.obs")) %>%
+  kable(., caption = 'Correlation between  HTKS total score and  reading scores for each fieldsite')
+
+```
+
+```{r plot correlation htks total and reading}
+ggplot(DFhtks, aes(x = HTKS, y = reading_cent, color = location2))+geom_point()+geom_smooth(method='lm')+
+  labs(title = 'Reading and HTKS score relationship for each site, centered values')
+```
+
+```{r plot correlation htks part 1 and 2 and reading}
+ggplot(DFhtks, aes(x = part_i + part_ii, y = reading_cent, color = location2))+geom_point()+geom_smooth(method='lm')+
+  labs(title = 'Reading and HTKS part 1 and 2 score relationship for each site, centered values')
+```
+
+### Years of schooling and HTKS 
+
+```{r yrs of schooling and htks}
+ggplot(DFhtks, aes(x = ed_sim, y = HTKS, color = location2))+geom_point()+geom_smooth(method='lm')+
+  labs(title = 'Years of schooling and HTKS score relationship for each site') +
+  xlab("Years of Schooling")
+
+ggplot(DFhtks, aes(x = ed_sim, y = part_i + part_ii, color = location2))+geom_point()+geom_smooth(method='lm')+
+  labs(title = 'Years of schooling and HTKS part i and ii score relationship for each site') +
+  xlab("Years of Schooling") +
+  ylab("HTKS part i and ii")
+
+```
+
+```{r HTKS al sites correlation table}
+# See here: http://www.sthda.com/english/wiki/ggcorrplot-visualization-of-a-correlation-matrix-using-ggplot2  
+#select data want to use
+htkscorrs = DFhtks %>% 
+  select(HTKS, part_i_ii, ed_sim, reading_z, math_z, age_yr) # select data want to include in analysis
+
+colnames(htkscorrs) <- c('location2', 'HTKS all', 'HTKS parts i & ii', 'Years of Schooling', 'Reading_z', 'Maths_z', 'Age') # re-naming variables for in the figure. 
+names(htkscorrs) # check that those new names were included
+
+#generate correlation matrix
+corrs <- round(cor(htkscorrs), 2) # this gives you a correlation for all the variables in htks corrs where all variables are rounded so that they are within 2 decimal places
+
+library(ggcorrplot) # add library to get function 
+# Compute a matrix of correlation p-values
+p.mat <- cor_pmat(htkscorrs)
+p.mat
+
+# Visualize the correlation matrix
+ggcorrs = ggcorrplot(corrs, hc.order = TRUE, outline.col = "gray", type = 'upper', insig = "blank", lab = T, title = "Correlation Matrix of Continuous Variables", legend.title = "Correlation (Pearson)")
+(ggcorrs)
+
+```
+
+```{r HTKS sites seperated correlation table}
+#Split file by location:
+vanvil_cors <- DFhtks %>% 
+  filter(location2 == 'VA_villages') #makes Vanuatu village only group only
+vantow_cors <- DFhtks %>% 
+  filter(location2 == 'VA_town') #makes Vanuatu town group only
+malaysia_cors <- DFhtks %>% 
+  filter(location2 == 'Malaysia') #makes malaysia group only
+india_cors <- DFhtks %>% 
+  filter(location2 == 'India') #makes india group only
+ghana_cors <- DFhtks %>% 
+  filter(location2 == 'Ghana') #makes ghana group only
+austin_cors <- DFhtks %>% 
+  filter(location2 == 'Austin') #makes austin group only
+# would have to run the correlation code through each one of these sites separately to get the results for each site- there must be a quicker way.... 
+
+
+
+```
+
+
+
+
+
+### HTKS models 
+```{r htks null model}
+# First do a null model for total HTKS score
+nullhtks_lm = lm(HTKS ~ 1, data = DFhtks)
+tidy(nullhtks_lm) # get model results 
+
+
+```
+
+
